@@ -99,7 +99,10 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
+    /*old
   ASSERT (intr_get_level () == INTR_ON);
+  
+      
   enum intr_level old_level;
   struct thread *t; 
   t=thread_current (); 
@@ -109,10 +112,17 @@ timer_sleep (int64_t ticks)
   { 
   old_level = intr_disable ();
   thread_block();
-  intr_set_level (old_level);
-  }
-  
+  intr_set_level (old_level)};*/
 
+  if(ticks <= 0){
+	return;
+    }
+    enum intr_level old_level = intr_disable();
+    struct thread *current_thread = thread_current();
+    current_thread->block_ticks = ticks;
+    thread_block();
+    intr_set_level(old_level);
+  
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -271,10 +281,10 @@ real_time_delay (int64_t num, int32_t denom)
 void 
 block_check(struct thread *t, void *aux UNUSED) 
 { 
-    if (t->status == THREAD_BLOCKED&&t->ticks_blocked>0)
+    if (t->status == THREAD_BLOCKED&&t->block_ticks>0)
     { 
-       t->ticks_blocked--; 
-       if (t->ticks_blocked == 0) 
+       t->block_ticks--; 
+       if (t->block_ticks == 0) 
        { 
           thread_unblock (t);  
        } 

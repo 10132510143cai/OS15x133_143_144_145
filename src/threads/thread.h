@@ -14,7 +14,6 @@ enum thread_status
     THREAD_DYING        /* About to be destroyed. */
   };
 
-/*static bool cmp(const struct list_elem *,const struct list_elem, void *);*/
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -26,13 +25,11 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 /* A kernel thread or user process.
-
    Each thread structure is stored in its own 4 kB page.  The
    thread structure itself sits at the very bottom of the page
    (at offset 0).  The rest of the page is reserved for the
    thread's kernel stack, which grows downward from the top of
    the page (at offset 4 kB).  Here's an illustration:
-
         4 kB +---------------------------------+
              |          kernel stack           |
              |                |                |
@@ -54,22 +51,18 @@ typedef int tid_t;
              |               name              |
              |              status             |
         0 kB +---------------------------------+
-
    The upshot of this is twofold:
-
       1. First, `struct thread' must not be allowed to grow too
          big.  If it does, then there will not be enough room for
          the kernel stack.  Our base `struct thread' is only a
          few bytes in size.  It probably should stay well under 1
          kB.
-
       2. Second, kernel stacks must not be allowed to grow too
          large.  If a stack overflows, it will corrupt the thread
          state.  Thus, kernel functions should not allocate large
          structures or arrays as non-static local variables.  Use
          dynamic allocation with malloc() or palloc_get_page()
          instead.
-
    The first symptom of either of these problems will probably be
    an assertion failure in thread_current(), which checks that
    the `magic' member of the running thread's `struct thread' is
@@ -89,20 +82,17 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int origin_priority;                  
     struct list_elem allelem;           /* List element for all threads list. */
-   
-    int ticks_blocked; 
+
+      /*new*/
+    struct list locks;                  /* Locks that the threads is holding */
+    struct lock *lock_waiting;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    int block_ticks;                 /* time of being blocked */
 
-      //new
-      int old_priority;
-      struct list_locks;
-      bool donated;
-      struct list locks;
-      struct lock *blocked;
-      int64_t wakeup_tick;
-
+      /*new*/
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -142,10 +132,17 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
-
+/* Added */
+void thread_hold_the_lock(struct lock *);
+void thread_donate_priority(struct thread *);
+void thread_remove_lock(struct lock *);
+void thread_update_priority(struct thread*);
+bool lock_cmp_priority (const struct list_elem *, const struct list_elem *, void *);
+bool cond_sema_cmp_priority (const struct list_elem *, const struct list_elem *, void *);
+bool compare(const struct list_elem *,const struct list_elem *,void *);
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
+void checkTicks(struct thread *t,void *aux UNUSED);
 #endif /* threads/thread.h */

@@ -1,8 +1,1 @@
-FAIL
-Kernel panic in run: PANIC at ../../threads/synch.c:311 in lock_release(): assertion `lock != NULL' failed.
-Call stack: 0xc0107b11 0xc0102931 0xc010b729 0xc01010cc
-Translation of call stack:
-0xc0107b11: debug_panic (.../../lib/kernel/debug.c:37)
-0xc0102931: lock_release (...../../threads/synch.c:312)
-0xc010b729: donor_thread_func (...riority-donate-chain.c:97)
-0xc01010cc: kernel_thread (..../../threads/thread.c:545)
+PASS
