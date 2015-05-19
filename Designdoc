@@ -1,0 +1,219 @@
+            +--------------------+
+            |       CS 326       |
+            | PROJECT 1: THREADS |
+            |   DESIGN DOCUMENT  |
+            +--------------------+
+                   
+---- GROUP ----
+
+Jinghui Cai <10132510143@ecnu.cn>
+YIxuan Chen <10132510144@ecnu.cn>
+Yuntao Zhu  <10132510145@ecnu.cn>
+Chen Zhang  <10132510133@ecnu.cn>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+                 ALARM CLOCK
+                 ===========
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+enum thread_status
+  {
+    THREAD_RUNNING,     /* Running thread. */
+    THREAD_READY,       /* Not running but ready to run. */
+    THREAD_BLOCKED,     /* Waiting for an event to trigger. */
+    THREAD_DYING        /* About to be destroyed. */
+  };
+
+THREAD_BLOCKED is added to show one condition that thread is blocked.
+
+struct thread
+  {
+    /* Owned by thread.c. */
+    tid_t tid;                          /* Thread identifier. */
+    enum thread_status status;          /* Thread state. */
+    char name[16];                      /* Name (for debugging purposes). */
+    uint8_t *stack;                     /* Saved stack pointer. */
+    int priority;                       /* Priority. */
+    int origin_priority;                  
+    struct list_elem allelem;
+/*new*/
+    struct list locks;                  /* Locks that the threads is holding */
+    struct lock *lock_waiting;
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+    int block_ticks;                 /* time of being blocked */
+
+      /*new*/
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+#endif
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+  };
+
+In the alarm-clock,the attribute needed to add is 
+Int block_ticks.
+
+The block_ticks is to record the sleep time of a thread. It will decrease 1 when a check is done. And when it equals to 0, the thread will wake up. 
+
+
+---- ALGORITHMS ----
+>> A2: Briefly describe what happens in a call to timer_sleep(),
+>> including the effects of the timer interrupt handler.
+
+When timer_sleep() is called, it will directly block the thread. And the ticks_blocked is to record the time having slept, and wait to wake up. 
+
+Timer interrupt is the timer interrupt handler.
+The added is the thread_foreach.It is to check the time of sleep and if it should wake up. And the following function is the block_check.
+
+
+>> A3: What steps are taken to minimize the amount of time spent in
+>> the timer interrupt handler?
+
+To minimize the amount of time, function block_check is executed,and in the following of block_check, block_ticks is decreased, and when block_ticks equals to 0,thread_unblock is executed. It solve the problem of busy waiting.
+
+---- SYNCHRONIZATION ----
+
+>> A4: How are race conditions avoided when multiple threads call
+>> timer_sleep() simultaneously?
+
+In the timer_sleep, there is a function make the thread blocked.
+So it can avoid race conditions when multiple threads call, only when the interrupt is turned off, other threads can call timer_sleep().
+
+>> A5: How are race conditions avoided when a timer interrupt occurs
+>> during a call to timer_sleep()?
+
+When the timer_sleep is called, there is a block which avoid it.
+There is a list for the blocked thread, and after it has woken up, it will be sent to the ready list.
+
+---- RATIONALE ----
+
+This design is easy to understand and easy to execute. It use a variable to check if the thread should wake up and it will not busy waiting.
+The other designs may more difficult, but the effect is same. This the reason why I use this design.
+
+             PRIORITY SCHEDULING
+             ===================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+struct thread
+  {
+    /* Owned by thread.c. */
+    tid_t tid;                          /* Thread identifier. */
+    enum thread_status status;          /* Thread state. */
+    char name[16];                      /* Name (for debugging purposes). */
+    uint8_t *stack;                     /* Saved stack pointer. */
+    int priority;                       /* Priority. */
+    int origin_priority;                  
+    struct list_elem allelem;
+/*new*/
+    struct list locks;                  /* Locks that the threads is holding */
+    struct lock *lock_waiting;
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem;              /* List element. */
+    int block_ticks;                 /* time of being blocked */
+
+      /*new*/
+#ifdef USERPROG
+    /* Owned by userprog/process.c. */
+    uint32_t *pagedir;                  /* Page directory. */
+#endif
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+  };
+
+In thread, the added things are
+struct list locks;       
+    struct lock *lock_waiting;
+    struct list_elem elem;              
+
+locks is the list of locks that the threads is holding.
+Lock_waiting is share between thread.c and synch.c. In other words, it is the lock the thread is waiting for.
+Elem is the list of thread.
+
+In synch
+struct lock 
+  {
+    struct thread *holder;      /* Thread holding lock (for debugging). */
+    struct semaphore semaphore; /* Binary semaphore controlling access. */
+      struct list_elem elem;
+      int max_priority;         /* Max priority among the threads acquiring the lock. */
+  };
+Max_priority means the max priority among the threads.
+Elem means the list of donation thread
+
+---- ALGORITHMS ----
+
+>> B3: How do you ensure that the highest priority thread waiting for
+>> a lock, semaphore, or condition variable wakes up first?
+
+In order to ensure that the highest priority thread wakes up first, we should ensure and maintain the list with the priority.
+So the most important work is to maintain the elem.
+First, when the thread is put into the list, they should be put in with order. Same when the thread init or yield.
+
+We use the function list_insert_ordered instead of list_pushe_back.
+And we write the compare function
+
+>> B4: Describe the sequence of events when a call to lock_acquire()
+>> causes a priority donation.  How is nested donation handled?
+
+1.	Thread require the current lock.
+2.	If the priority of the thread is bigger than lock’s , the thread’s priority donates to the lock.
+3.	Interrupt is turned on
+4.	Thread update priority.
+5.	Interrupt is turned off. 
+6.	The current thread is removed.
+7.	Lock is released and the next thread get it.
+
+The donation is just change the max priority, and execute update after it.
+
+>> B5: Describe the sequence of events when lock_release() is called
+>> on a lock that a higher-priority thread is waiting for.
+
+1.	Remove the lock of thread
+2.	Remove the thread from the list
+3.	Update the priority
+4.	Set the lock’s holder null
+5.	Make lock can be achieved by other thread.
+
+
+---- SYNCHRONIZATION ----
+
+>> B6: Describe a potential race in thread_set_priority() and explain
+>> how your implementation avoids it.  Can you use a lock to avoid
+>> this race?
+
+The priority of a thread can be changed by the method of donation or by itself.
+So if the donator change the lock holder’s priority and the thread set the priority in different order, it may cause the different result.
+
+So when the thread_set_priority is called, interrupts should be turned off.
+
+We can’t use locks to avoid this race because the interrupt handler can not acquire locks.
+
+---- RATIONALE ----
+
+>> B7: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+This design made an ordered list by priority which is easy to maintain. And with the donation, the high priority thread can be executed without a long waiting.
+While other designs may have problem when many threads need CPU.
